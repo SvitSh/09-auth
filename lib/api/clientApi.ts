@@ -1,77 +1,43 @@
-import { NewNote, Note, Tag } from '@/types/note';
-import { nextServer, PER_PAGE } from './api';
-import { EditUser, User, UserForSign } from '@/types/user';
-import { GetNotesRes } from './api';
+import axios from "axios";
+import type { Note } from "@/types/note";
+import type { User, EditUser } from "@/types/user";
 
-const fetchNotes = async (
-  search: string = '',
-  page: number = 1,
-  tag?: Tag
-): Promise<GetNotesRes> => {
-  const response = await nextServer.get<GetNotesRes>('/notes', {
-    params: {
-      page,
-      perPage: PER_PAGE,
-      ...(search !== '' && { search: search }),
-      ...(tag && { tag: tag }),
-    },
+/** Клиент для браузера — всегда относительный путь к нашим App Router API */
+export const nextClient = axios.create({
+  baseURL: "/api",
+  withCredentials: true,
+});
 
-  });
-  return response.data;
+/* ---------- Auth ---------- */
+export type AuthPayload = { email: string; password: string };
+
+export const register = (data: AuthPayload) => nextClient.post<User>("/auth/register", data);
+export const login    = (data: AuthPayload) => nextClient.post<User>("/auth/login", data);
+export const logout   = ()                   => nextClient.post<void>("/auth/logout");
+
+/** true, если сессия активна (200 OK). 401 — это просто нет сессии. */
+export const checkSession = async (): Promise<boolean> => {
+  try {
+    const res = await nextClient.get("/auth/session");
+    return res.status === 200;
+  } catch {
+    return false;
+  }
 };
 
-const fetchNoteById = async (id: string): Promise<Note> => {
-  const response = await nextServer.get<Note>(`/notes/${id}`, {
-  });
-  return response.data;
-};
+/** Совместимость со старым кодом */
+export const signUp = register;
+export const signIn = login;
 
-const deleteNote = async (noteId: string): Promise<Note> => {
-  const response = await nextServer.delete<Note>(`/notes/${noteId}`, {
-  });
-  return response.data;
-};
+/* ---------- Users ---------- */
+export const getMe  = () => nextClient.get<User>("/users/me").then(r => r.data);
+export const editMe = (payload: EditUser) => nextClient.patch<User>("/users/me", payload).then(r => r.data);
 
-const createNote = async (data: NewNote): Promise<Note> => {
-  const response = await nextServer.post<Note>('/notes', data, {
-    headers: {
-      
-    },
-  });
-  return response.data;
-};
+/* ---------- Notes (CSR) ---------- */
+export type NotesQuery = { page?: number; perPage?: number; tag?: string; search?: string };
 
-const signUp = async (payload: UserForSign) => {
-  const { data } = await nextServer.post<User>('/auth/register', payload);
-  return data;
-};
-
-const signIn = async (payload: UserForSign) => {
-  const { data } = await nextServer.post<User>('/auth/login', payload);
-  return data;
-};
-
-type CheckSessionRequest = {
-  success: boolean;
-};
-
-export const checkSession = async () => {
-  const res = await nextServer.get<CheckSessionRequest>('/auth/session');
-  return res.data.success;
-};
-
-export const getMe = async () => {
-  const { data } = await nextServer.get<User>('/users/me');
-  return data;
-};
-
-export const editMe = async (payload: EditUser) => {
-  const { data } = await nextServer.patch<User>('/users/me', payload);
-  return data;
-};
-
-export const logout = async (): Promise<void> => {
-  await nextServer.post('/auth/logout');
-};
-
-export { fetchNotes, deleteNote, createNote, fetchNoteById, signUp, signIn };
+export const getNotes   = (params: NotesQuery)                     => nextClient.get<Note[]>("/notes", { params });
+export const getNote    = (id: string)                             => nextClient.get<Note>(`/notes/${id}`);
+export const createNote = (data: { title: string; content: string; tag: string }) =>
+  nextClient.post<Note>("/notes", data);
+export const deleteNote = (id: string)                             => nextClient.delete<Note>(`/notes/${id}`);

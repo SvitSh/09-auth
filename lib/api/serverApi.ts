@@ -1,55 +1,8 @@
-import { cookies } from 'next/headers';
-import { nextServer, PER_PAGE } from './api';
-import { User } from '@/types/user';
-import { Note, Tag } from '@/types/note';
-import { GetNotesRes } from './api';
+import axios from "axios";
 
-export const checkServerSession = async () => {
-  const cookieStore = await cookies();
-  const res = await nextServer.get('/auth/session', {
-    headers: {
-      Cookie: cookieStore.toString(),
-    },
-  });
-  return res;
-};
+const baseURL = `${process.env.NEXT_PUBLIC_API_URL}/api`;
 
-export const getServerMe = async (): Promise<User> => {
-  const cookieStore = await cookies();
-  const { data } = await nextServer.get('/users/me', {
-    headers: {
-      Cookie: cookieStore.toString(),
-    },
-  });
-  return data;
-};
-
-export const fetchServerNotes = async (
-  search: string = '',
-  page: number = 1,
-  tag?: Tag
-): Promise<GetNotesRes> => {
-  const cookieStore = await cookies();
-  const response = await nextServer.get<GetNotesRes>('/notes', {
-    headers: {
-      Cookie: cookieStore.toString(),
-    },
-    params: {
-      page,
-      perPage: PER_PAGE,
-      ...(search !== '' && { search: search }),
-      ...(tag && { tag: tag }),
-    },
-  });
-  return response.data;
-};
-
-export const fetchServerNoteById = async (id: string): Promise<Note> => {
-  const cookieStore = await cookies();
-  const response = await nextServer.get<Note>(`/notes/${id}`, {
-    headers: {
-      Cookie: cookieStore.toString(),
-    },
-  });
-  return response.data;
-};
+export const nextServer = axios.create({
+  baseURL,
+  withCredentials: true,
+});
