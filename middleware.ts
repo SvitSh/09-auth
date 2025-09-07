@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { checkServerSession } from './lib/api/serverApi';
+import { checkServerSession } from './lib/api/edgeSession';
 import { parse } from 'cookie';
 
 const publicRoutes = ['/sign-in', '/sign-up'];
@@ -17,7 +17,7 @@ export async function middleware(request: NextRequest) {
 
   if (!accessToken) {
     if (refreshToken) {
-      const data = await checkServerSession();
+      const data = await checkServerSession(request);
       const setCookie = data.headers['set-cookie'];
 
       if (setCookie) {
