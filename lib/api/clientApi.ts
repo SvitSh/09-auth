@@ -1,43 +1,74 @@
 import axios from "axios";
-import type { Note } from "@/types/note";
-import type { User, EditUser } from "@/types/user";
+import type { Note, Tag, NewNote } from "@/types/note";
+import type { User, EditUser, UserForSign } from "@/types/user";
+import { PER_PAGE, type GetNotesRes } from "./api";
 
-/** Клиент для браузера — всегда относительный путь к нашим App Router API */
 export const nextClient = axios.create({
-  baseURL: "/api",
+  baseURL: "/api",          // важный момент: только относительный путь
   withCredentials: true,
 });
 
-/* ---------- Auth ---------- */
-export type AuthPayload = { email: string; password: string };
+/* ---------- Аутентификация ---------- */
+export const register = (payload: UserForSign) =>
+  nextClient.post<User>("/auth/register", payload).then(r => r.data);
 
-export const register = (data: AuthPayload) => nextClient.post<User>("/auth/register", data);
-export const login    = (data: AuthPayload) => nextClient.post<User>("/auth/login", data);
-export const logout   = ()                   => nextClient.post<void>("/auth/logout");
+export const login = (payload: UserForSign) =>
+  nextClient.post<User>("/auth/login", payload).then(r => r.data);
 
-/** true, если сессия активна (200 OK). 401 — это просто нет сессии. */
+export const logout = () =>
+  nextClient.post("/auth/logout").then(() => {});
+
+// алиасы под ожидаемые названия в компонентах
+export const signUp = register;
+export const signIn = login;
+
+type CheckSessionResponse = { success: boolean } | undefined;
+/** true = есть сессия, false = нет */
 export const checkSession = async (): Promise<boolean> => {
   try {
-    const res = await nextClient.get("/auth/session");
-    return res.status === 200;
+    const res = await nextClient.get<CheckSessionResponse>("/auth/session");
+    return (!!res && res.status === 200);
   } catch {
     return false;
   }
 };
 
-/** Совместимость со старым кодом */
-export const signUp = register;
-export const signIn = login;
+export const getMe = () =>
+  nextClient.get<User>("/users/me").then(r => r.data);
 
-/* ---------- Users ---------- */
-export const getMe  = () => nextClient.get<User>("/users/me").then(r => r.data);
-export const editMe = (payload: EditUser) => nextClient.patch<User>("/users/me", payload).then(r => r.data);
+export const editMe = (payload: EditUser) =>
+  nextClient.patch<User>("/users/me", payload).then(r => r.data);
 
-/* ---------- Notes (CSR) ---------- */
-export type NotesQuery = { page?: number; perPage?: number; tag?: string; search?: string };
+/* ---------- Нотатки (CSR) ---------- */
+export const fetchNotes = (
+  search: string = "",
+  page: number = 1,
+  tag?: Tag
+): Promise<GetNotesRes> => {
+  return nextClient
+    .get<GetNotesRes>("/notes", {
+      params: {
+        page,
+        perPage: PER_PAGE,
+        ...(search ? { search } : {}),
+        ...(tag ? { tag } : {}),
+      },
+    })
+    .then(r => r.data);
+};
 
-export const getNotes   = (params: NotesQuery)                     => nextClient.get<Note[]>("/notes", { params });
-export const getNote    = (id: string)                             => nextClient.get<Note>(`/notes/${id}`);
-export const createNote = (data: { title: string; content: string; tag: string }) =>
-  nextClient.post<Note>("/notes", data);
-export const deleteNote = (id: string)                             => nextClient.delete<Note>(`/notes/${id}`);
+export const fetchNoteById = (id: string) =>
+  nextClient.get<Note>(`/notes/${id}`).then(r => r.data);
+
+export const createNote = (data: NewNote) =>
+  // если в типе NewNote поле content опционально — подставим пустую строку
+  nextClient
+    .post<Note>("/notes", {
+      title: data.title,
+      content: data.content ?? "",
+      tag: data.tag,
+    })
+    .then(r => r.data);
+
+export const deleteNote = (id: string) =>
+  nextClient.delete<Note>(`/notes/${id}`).then(r => r.data);
