@@ -1,71 +1,39 @@
-import { cookies } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { checkServerSession } from './lib/api/edgeSession';
-import { parse } from 'cookie';
-
-const publicRoutes = ['/sign-in', '/sign-up'];
-const privateRoutes = ['/profile', '/notes', '/notes/filter'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get('accessToken')?.value;
-  const refreshToken = cookieStore.get('refreshToken')?.value;
 
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
-  const isPrivateRoute = privateRoutes.some(route => pathname.startsWith(route));
-
-  if (!accessToken) {
-    if (refreshToken) {
-      const data = await checkServerSession(request);
-      const setCookie = data.headers['set-cookie'];
-
-      if (setCookie) {
-        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
-        for (const cookieStr of cookieArray) {
-          const parsed = parse(cookieStr);
-          const options = {
-            expires: parsed.Expires ? new Date(parsed.Expires) : undefined,
-            path: parsed.Path,
-            maxAge: Number(parsed['Max-Age']),
-          };
-          if (parsed.accessToken) cookieStore.set('accessToken', parsed.accessToken, options);
-          if (parsed.refreshToken) cookieStore.set('refreshToken', parsed.refreshToken, options);
-        }
-        if (isPublicRoute) {
-          return NextResponse.redirect(new URL('/', request.url), {
-            headers: {
-              Cookie: cookieStore.toString(),
-            },
-          });
-        }
-        if (isPrivateRoute) {
-          return NextResponse.next({
-            headers: {
-              Cookie: cookieStore.toString(),
-            },
-          });
-        }
-      }
-    }
-
-    if (isPublicRoute) {
-      return NextResponse.next();
-    }
-
-    if (isPrivateRoute) {
-      return NextResponse.redirect(new URL('/sign-in', request.url));
-    }
-  }
-
-  if (isPublicRoute) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-  if (isPrivateRoute) {
+  // пропускаем статику и API
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/icon.jpg'
+  ) {
     return NextResponse.next();
   }
+
+  const isAuthPage = pathname === '/sign-in' || pathname === '/sign-up';
+  const isPrivate = pathname.startsWith('/notes') || pathname.startsWith('/profile');
+
+  const isAuthenticated = await checkServerSession(request);
+
+  if (isPrivate && !isAuthenticated) {
+    const url = new URL('/sign-in', request.url);
+    url.searchParams.set('from', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (isAuthPage && isAuthenticated) {
+    return NextResponse.redirect(new URL('/profile', request.url));
+  }
+
+  return NextResponse.next();
 }
 
+// матчим всё, кроме статики и api
 export const config = {
-  matcher: ['/profile/:path*', '/notes/:path*', '/notes/filter/:path*', '/sign-in', '/sign-up'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon.jpg|api).*)'],
 };
